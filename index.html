@@ -546,13 +546,13 @@
     <div class="sidebar-brand-sub" id="sidebarDate">업데이트: 2026.07.10</div>
   </div>
   <div class="sidebar-nav">
-    <button class="sidebar-btn" data-tab="dashboard" onclick="switchTab('dashboard',this)">
+    <button class="sidebar-btn active" data-tab="dashboard" onclick="switchTab('dashboard',this)">
       <span class="sb-icon">📊</span>대시보드
     </button>
     <button class="sidebar-btn" data-tab="portfolio" onclick="switchTab('portfolio',this)">
       <span class="sb-icon">🥧</span>포트폴리오
     </button>
-    <button class="sidebar-btn active" data-tab="input" onclick="switchTab('input',this)">
+    <button class="sidebar-btn" data-tab="input" onclick="switchTab('input',this)">
       <span class="sb-icon">✏️</span>가격 입력
     </button>
     <button class="sidebar-btn" data-tab="history" onclick="switchTab('history',this)">
@@ -571,7 +571,7 @@
     </button>
   </div>
 </nav>
-<div id="page-dashboard" class="page">
+<div id="page-dashboard" class="page active">
 
   <!-- Hero card -->
   <div class="hero-card">
@@ -1190,7 +1190,7 @@
 </div>
 
 <!-- INPUT -->
-<div id="page-input" class="page active">
+<div id="page-input" class="page">
   <div class="card">
     <div class="input-section-title">📅 날짜 및 공통</div>
     <div class="fg" style="margin-bottom:10px">
@@ -3419,9 +3419,9 @@
 
 <!-- TABS -->
 <div class="tabs">
-  <button class="tab-btn" data-tab="dashboard" onclick="switchTab('dashboard',this)"><span class="icon">📊</span>대시보드</button>
+  <button class="tab-btn active" data-tab="dashboard" onclick="switchTab('dashboard',this)"><span class="icon">📊</span>대시보드</button>
   <button class="tab-btn" data-tab="portfolio" onclick="switchTab('portfolio',this)"><span class="icon">🥧</span>포트폴리오</button>
-  <button class="tab-btn active" data-tab="input" onclick="switchTab('input',this)"><span class="icon">✏️</span>입력</button>
+  <button class="tab-btn" data-tab="input" onclick="switchTab('input',this)"><span class="icon">✏️</span>입력</button>
   <button class="tab-btn" data-tab="history" onclick="switchTab('history',this)"><span class="icon">📋</span>이력</button>
   <button class="tab-btn" data-tab="rebal" onclick="switchTab('rebal',this)"><span class="icon">🔄</span>리밸런싱</button>
 </div>
@@ -3523,20 +3523,29 @@ async function load(){
   if(!_loadApiCfg()){S=_emptyState();showSetup();return;}
   try{
     const res=await _api('GET');
-    if(!res.ok)throw new Error(res.error||'서버 오류');
+    if(!res.ok){const err=new Error(res.error||'서버 오류');err.serverError=true;throw err;}
     S=res.data||_emptyState();
     _normalize();
     try{localStorage.setItem(CACHE_LS,JSON.stringify(Object.assign({_loaded:true},S)));}catch(e){}
     _setSync('ok');
   }catch(e){
+    // 서버가 오류를 '응답'한 경우(인증 실패 등)와 네트워크 단절을 구분해 표시
+    const serverSaidNo=e&&e.serverError;
     let cached=null;
     try{cached=JSON.parse(localStorage.getItem(CACHE_LS)||'null');}catch(_){}
     if(cached&&cached._loaded){
-      S=cached;_normalize();_setSync('offline');
-      toast('📴 오프라인 — 마지막 동기화 데이터를 표시합니다');
+      S=cached;_normalize();
+      if(serverSaidNo){
+        _setSync('error');
+        toast('⚠️ 서버 응답: '+e.message+' — ⚙️ 서버 설정(URL·토큰)을 확인하세요. 화면은 마지막 동기화 데이터입니다.',true);
+      }else{
+        _setSync('offline');
+        toast('📴 오프라인 — 마지막 동기화 데이터를 표시합니다');
+      }
     }else{
       S=_emptyState();_setSync('error');
-      toast('❌ 서버 연결 실패: '+(e.message||e),true);
+      toast('❌ 서버 연결 실패: '+(e.message||e)+(serverSaidNo?' — ⚙️ 서버 설정을 확인하세요':''),true);
+      if(serverSaidNo)showSetup();
     }
   }
 }
@@ -3547,11 +3556,11 @@ async function save(){
   _setSync('saving');
   try{
     const res=await _api('POST',{action:'save',data:S});
-    if(!res.ok)throw new Error(res.error||'저장 실패');
+    if(!res.ok){const err=new Error(res.error||'저장 실패');err.serverError=true;throw err;}
     _setSync('ok');
   }catch(e){
-    _setSync('offline');
-    toast('⚠️ 서버 저장 실패 — 연결 확인 후 입력을 한 번 더 저장하세요: '+(e.message||e),true);
+    _setSync(e&&e.serverError?'error':'offline');
+    toast('⚠️ 서버 저장 실패('+(e.message||e)+') — '+(e&&e.serverError?'⚙️ 서버 설정을 확인하세요':'연결 확인 후 입력을 한 번 더 저장하세요'),true);
   }
 }
 async function resync(){
