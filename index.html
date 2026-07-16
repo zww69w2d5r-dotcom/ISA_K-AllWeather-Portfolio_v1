@@ -3499,6 +3499,7 @@ function _setSync(state){
   btn.className='save-btn sync-btn';
   if(state==='ok'){ic.textContent='☁️';lb.textContent='동기화됨';}
   else if(state==='saving'){ic.textContent='⏳';lb.textContent='저장 중…';}
+  else if(state==='loading'){ic.textContent='⏳';lb.textContent='동기화 중…';}
   else if(state==='offline'){btn.classList.add('sync-off');ic.textContent='📴';lb.textContent='오프라인';}
   else if(state==='error'){btn.classList.add('sync-err');ic.textContent='⚠️';lb.textContent='연결 실패';}
   else{ic.textContent='☁️';lb.textContent='동기화';}
@@ -4745,7 +4746,17 @@ function toast(msg,err=false){
   toastT=setTimeout(()=>t.className='toast',2500);
 }
 
-(async()=>{await load();renderAll();})();
+(async()=>{
+  // 접속 즉시: 기기에 저장된 마지막 동기화 데이터로 먼저 렌더 (stale-while-revalidate)
+  let hadCache=false;
+  try{
+    const c=JSON.parse(localStorage.getItem(CACHE_LS)||'null');
+    if(c&&c._loaded&&_loadApiCfg()){S=c;_normalize();renderAll();hadCache=true;_setSync('loading');}
+  }catch(e){}
+  if(!hadCache){S=_emptyState();renderAll();}   // 화석 값 대신 빈 상태로 초기화
+  // 배경에서 서버 동기화 → 최신 데이터 도착 시 갱신
+  await load();renderAll();
+})();
 if('serviceWorker' in navigator){
   addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
 }
